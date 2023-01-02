@@ -17,6 +17,10 @@ Version 0.0.1 of this analyzer supports _only_ **Byte** mode.  Future modes will
 * Decoding **Write** instruction supported
 * Decoding **Read** instruction supported
 
+## 0.0.2 Plans
 
+* Decoding **Read Mode Register** instruction
+* Decoding **Write Mode Register** instruction
+* Support for **Sequential** mode decoding
 
   
