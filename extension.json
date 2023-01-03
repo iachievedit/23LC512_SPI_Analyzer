@@ -2,7 +2,7 @@
   "name": "23LC512 SPI",
   "apiVersion": "1.0.0",
   "author": "iAchieved.it",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Decode 23LC512 SPI",
   "extensions": {
     "23LC512 SPI": {

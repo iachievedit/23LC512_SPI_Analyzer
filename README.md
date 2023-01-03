@@ -8,7 +8,7 @@ This chip supports three different modes:
 * Page
 * Sequential
 
-Version 0.0.1 of this analyzer supports _only_ **Byte** mode.  Future modes will be supported.
+Version 0.0.2 of this analyzer supports _only_ decoding **Byte** mode.  Future modes will be supported.
   
 ## 0.0.1
 
@@ -21,6 +21,10 @@ Version 0.0.1 of this analyzer supports _only_ **Byte** mode.  Future modes will
 
 * Decoding **Read Mode Register** instruction
 * Decoding **Write Mode Register** instruction
+
+## 0.0.3 Plans
+
 * Support for **Sequential** mode decoding
+
 
   
