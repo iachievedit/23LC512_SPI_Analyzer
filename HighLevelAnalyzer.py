@@ -27,6 +27,12 @@ READ_INS  = b'\x03'
 RMDR_INS  = b'\x05'
 WRMR_INS  = b'\x01'
 
+# Operation Modes of the 23A512/23LC512
+BYTE_MODE       = 0x00
+PAGE_MODE       = 0x02
+SEQUENTIAL_MODE = 0x01
+RESERVED        = 0x03
+
 # Analyzer states for Byte mode
 START      = 0
 GET_INS    = 1
@@ -48,6 +54,9 @@ class HLA_23LC512_SPI(HighLevelAnalyzer):
     },
     'Data': {
       'format': 'Data:  {{data.data}}'
+    },
+    'Mode': {
+      'format': '{{data.mode}} Mode'
     }
   }
 
@@ -63,11 +72,30 @@ class HLA_23LC512_SPI(HighLevelAnalyzer):
       return 'Write'
     elif instruction == READ_INS:
       return 'Read'
+    elif instruction == WRMR_INS:
+      return 'Write Mode Register'
+    elif instruction == RMDR_INS:
+      return 'Read Mode Register'
     else:
       return 'Unknown'
 
+  # Decodes the mode register value, see
+  # 2.5 Read Mode Register Instruction of datasheet
+  def decode_mode(self, mode_register):
+    # Mode value is in Bits 7 and 6
+    mode = (mode_register & 0xc0) >> 6
+    return mode
+
+  def mode_str(self, mode):
+    if mode == BYTE_MODE:
+      return 'Byte'
+    elif mode == PAGE_MODE:
+      return 'Page'
+    elif mode == SEQUENTIAL_MODE:
+      return 'Sequential'
+
   def decode(self, frame: AnalyzerFrame):
-    # SPI frame types are: enable, result, 
+    # SPI frame types are: enable, result, and disable
     # enable
     # result
     # disable
@@ -82,7 +110,10 @@ class HLA_23LC512_SPI(HighLevelAnalyzer):
         self.address     = None               # Prepare to receive address
         self.data        = None               # Prepare to receive data
           
-        self.state = GET_ADDR_H           # Next byte will be the high byte of the address
+        if self.instruction in [WRITE_INS, READ_INS]:
+          self.state = GET_ADDR_H           # Next byte will be the high byte of the address
+        elif self.instruction in [WRMR_INS, RMDR_INS]:
+          self.state = GET_DATA             # Next byte will be mode register value
 
         return AnalyzerFrame('Instruction', frame.start_time, frame.end_time, {
           'instruction': self.instruction_str(self.instruction)
@@ -109,8 +140,31 @@ class HLA_23LC512_SPI(HighLevelAnalyzer):
 
         if self.instruction == WRITE_INS:
           self.data = frame.data['mosi']
+
+          if self.mode_setting == 'Byte':
+            self.data = self.data[0]
+
         elif self.instruction == READ_INS:
           self.data = frame.data['miso']
+
+          if self.mode_setting == 'Byte':
+            self.data = self.data[0]
+
+        elif self.instruction == WRMR_INS:
+          self.data = frame.data['mosi'][0]
+
+          mode = self.decode_mode(self.data)
+          return AnalyzerFrame('Mode', frame.start_time, frame.end_time, {
+            'mode':  self.mode_str(mode)
+          })
+
+        elif self.instruction == RMDR_INS:
+          self.data = frame.data['miso'][0]
+
+          mode = self.decode_mode(self.data)
+          return AnalyzerFrame('Mode', frame.start_time, frame.end_time, {
+            'mode':  self.mode_str(mode)
+          })
 
         # Return the data frame itself
         return AnalyzerFrame('Data', frame.start_time, frame.end_time, {
