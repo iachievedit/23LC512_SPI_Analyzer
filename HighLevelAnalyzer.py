@@ -43,7 +43,7 @@ GET_DATA   = 4
 # High level analyzers must subclass the HighLevelAnalyzer class.
 class HLA_23LC512_SPI(HighLevelAnalyzer):
 
-  mode_setting = ChoicesSetting(choices=('Byte', 'Page', 'Sequential'))
+  mode_setting = ChoicesSetting(choices=('Sequential', 'Byte', 'Page'))
 
   result_types = {
     'Instruction': {
@@ -108,7 +108,7 @@ class HLA_23LC512_SPI(HighLevelAnalyzer):
 
         self.instruction = frame.data['mosi'] # Our instruction will be on the MOSI line
         self.address     = None               # Prepare to receive address
-        self.data        = None               # Prepare to receive data
+        self.data        = b''                # Prepare to receive data
           
         if self.instruction in [WRITE_INS, READ_INS]:
           self.state = GET_ADDR_H           # Next byte will be the high byte of the address
@@ -132,23 +132,49 @@ class HLA_23LC512_SPI(HighLevelAnalyzer):
 
         self.state = GET_DATA
 
+        # In Sequential mode we want to accumulate all of the data
+        # received in the coming frames
+        if self.mode_setting == 'Sequential':
+          self.sequential_frame_count = 0
+
         return AnalyzerFrame('Address', self.address_frame_start, frame.end_time, {
           'address': self.address
         })        
 
-      elif self.state == GET_DATA:
+      elif self.state == GET_DATA:          
 
         if self.instruction == WRITE_INS:
-          self.data = frame.data['mosi']
 
           if self.mode_setting == 'Byte':
-            self.data = self.data[0]
+            self.data = frame.data['mosi'][0]
+            self.data_frame_start = frame.start_time
+            self.data_frame_end   = frame.end_time
 
+          elif self.mode_setting == 'Sequential':
+
+            if self.sequential_frame_count == 0:
+              self.data_frame_start = frame.start_time
+
+            self.sequential_frame_count += 1
+            self.data += frame.data['mosi']
+            self.data_frame_end = frame.end_time
+  
         elif self.instruction == READ_INS:
-          self.data = frame.data['miso']
 
           if self.mode_setting == 'Byte':
-            self.data = self.data[0]
+            self.data = frame.data['miso'][0]
+            self.data_frame_start = frame.start_time
+            self.data_frame_end   = frame.end_time
+
+          elif self.mode_setting == 'Sequential':
+
+            if self.sequential_frame_count == 0:
+              self.data_frame_start = frame.start_time
+
+            self.sequential_frame_count += 1
+            self.data += frame.data['miso']
+            self.data_frame_end = frame.end_time
+
 
         elif self.instruction == WRMR_INS:
           self.data = frame.data['mosi'][0]
@@ -166,7 +192,15 @@ class HLA_23LC512_SPI(HighLevelAnalyzer):
             'mode':  self.mode_str(mode)
           })
 
+    elif frame.type == 'disable':
+
+      if self.state == GET_DATA:
         # Return the data frame itself
-        return AnalyzerFrame('Data', frame.start_time, frame.end_time, {
-            'data': self.data
+        return AnalyzerFrame('Data',
+          self.data_frame_start,
+          self.data_frame_end, {
+          'data': self.data
         })
+      else:
+        # This isn't a valid state
+        pass
